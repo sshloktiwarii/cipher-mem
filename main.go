@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,18 +19,20 @@ import (
 )
 
 type Config struct {
-	VaultPath string
-	Port      int
-	ModelPath string
-	SharedLib string
-	IndexPath string
-	Engine    string
+	VaultPath  string
+	Port       int
+	SocketPath string
+	ModelPath  string
+	SharedLib  string
+	IndexPath  string
+	Engine     string
 }
 
 func main() {
 	cfg := Config{}
 	flag.StringVar(&cfg.VaultPath, "vault", "./sample_vault", "Path to Obsidian vault markdown directory")
 	flag.IntVar(&cfg.Port, "port", 8083, "HTTP service port")
+	flag.StringVar(&cfg.SocketPath, "socket", "", "Unix domain socket path (e.g. /tmp/cipher/mem.sock)")
 	flag.StringVar(&cfg.Engine, "engine", "onnx", "Embedding engine: onnx (embedded in-process runtime) or pure-go")
 	flag.StringVar(&cfg.ModelPath, "model-path", "./minilm.onnx", "Path to local all-MiniLM-L6-v2 .onnx model file")
 	flag.StringVar(&cfg.SharedLib, "onnx-lib", "", "Path to onnxruntime shared library (.dylib/.so)")
@@ -227,6 +230,20 @@ func main() {
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
+	}
+
+	if cfg.SocketPath != "" {
+		_ = os.MkdirAll(filepath.Dir(cfg.SocketPath), 0755)
+		_ = os.Remove(cfg.SocketPath)
+		unixListener, err := net.Listen("unix", cfg.SocketPath)
+		if err == nil {
+			go func() {
+				log.Printf("[Cipher-Mem] Server listening on Unix Domain Socket %s", cfg.SocketPath)
+				_ = server.Serve(unixListener)
+			}()
+		} else {
+			log.Printf("[Cipher-Mem] Warn: failed to listen on unix socket: %v", err)
+		}
 	}
 
 	// Server runner
