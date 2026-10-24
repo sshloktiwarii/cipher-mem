@@ -4,6 +4,8 @@ Persistent Markdown vault parser, vector indexer, and cosine similarity engine.
 
 Written in pure Go. Continuously watches an Obsidian vault or directory of Markdown files via `fsnotify`, extracts semantic chunks and wikilinks (`[[link]]`), and provides sub-millisecond vector similarity search for downstream agents.
 
+Looking for a plain-English, non-technical summary? See [EXPLAINER.md](EXPLAINER.md).
+
 ---
 
 ## Capabilities
