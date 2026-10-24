@@ -1,0 +1,19 @@
+# Binaries
+foundry-graph
+*.exe
+*.test
+
+# Persistent DB / Indexes
+vault_index.json
+*.db
+*.sqlite
+
+# Frontend
+web/node_modules/
+web/.next/
+web/out/
+
+# Environment & OS
+.env
+.env.*
+.DS_Store
