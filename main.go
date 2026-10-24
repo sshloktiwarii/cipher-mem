@@ -139,7 +139,7 @@ func main() {
 		}
 		go func() {
 			if err := indexer.IndexVault(); err != nil {
-				log.Printf("[Foundry-Graph] Manual reindex error: %v", err)
+				log.Printf("[Cipher-Mem] Manual reindex error: %v", err)
 			}
 		}()
 		w.Header().Set("Content-Type", "application/json")
@@ -148,6 +148,60 @@ func main() {
 			"message": "Re-indexing vault in background",
 		})
 	}))
+
+	// 5. Ingest Note & Neural Backlinks (Obsidian Second-Brain Writer)
+	type CreateNoteRequest struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+
+	handleCreateNote := withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req CreateNoteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"Invalid JSON: %v"}`, err), http.StatusBadRequest)
+			return
+		}
+		if req.Title == "" || req.Content == "" {
+			http.Error(w, `{"error":"Title and content are required fields"}`, http.StatusBadRequest)
+			return
+		}
+
+		filename := req.Title
+		if !strings.HasSuffix(strings.ToLower(filename), ".md") {
+			filename += ".md"
+		}
+		filename = filepath.Base(filepath.Clean(filename))
+		targetPath := filepath.Join(absVault, filename)
+
+		if err := os.WriteFile(targetPath, []byte(req.Content), 0644); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"Failed to write note: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+
+		// Trigger immediate incremental indexing
+		if err := indexer.IndexFile(targetPath); err != nil {
+			log.Printf("[Cipher-Mem] Warning indexing note %s: %v", targetPath, err)
+		}
+		_ = store.SaveSnapshot()
+
+		log.Printf("[Cipher-Mem] Ingested note: %s (%d bytes)", filename, len(req.Content))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "created",
+			"file":    filename,
+			"path":    targetPath,
+			"message": "Note persisted to Obsidian vault and indexed into vector memory",
+		})
+	})
+
+	mux.HandleFunc("/api/note", handleCreateNote)
+	mux.HandleFunc("/ingest-note", handleCreateNote)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
