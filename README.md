@@ -1,32 +1,52 @@
-# cipher-mem: Obsidian Vector Engine & Memory Visualizer
+# 🧠 cipher-mem — Obsidian Vector Engine & Memory Visualizer
 
-A persistent memory engine and interactive force-directed graph visualizer built in Go and Next.js. It bridges local LLM agents directly with an Obsidian second brain, automatically parsing, chunking, and embedding Markdown vaults so agents can ground decisions in architecture records, incident resolutions, and team knowledge.
+[![Language](https://img.shields.io/badge/Language-Go%201.24-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=flat-square)](#)
+[![Search Latency](https://img.shields.io/badge/Search%20Latency-%3C1ms-success?style=flat-square)](#)
+
+A persistent second-brain memory engine and interactive force-directed graph visualizer built in Go. Bridges local AI agents with an Obsidian vault—automatically watching, parsing, chunking, and embedding Markdown notes so agents make decisions grounded in your actual team knowledge and incident resolutions.
+
+---
+
+### 💡 For Non-Techies: What does this do?
+> AI models have short-term memory—they forget what happened yesterday or in past conversations.
+>
+> `cipher-mem` gives your AI a permanent memory library:
+> - **Watches your notes folder**: Whenever you write or edit a note in Obsidian, `cipher-mem` reads and indexes it automatically.
+> - **Understands meaning, not just keywords**: When an incident occurs, it retrieves relevant past solutions based on conceptual similarity (e.g., finding how you fixed a database timeout 3 months ago).
+> - **Fast and private**: Searches your private notes in under 1 millisecond on your machine without uploading your files to any cloud.
+
+---
 
 ## Core Capabilities
-- **Continuous Vault Watcher**: Uses `fsnotify` to track changes in any Obsidian vault in real time, auto-reindexing modified chunks and purging deleted notes.
-- **Wikilink & Markdown Graph Extraction**: Resolves `[[wikilinks]]` and relative markdown links into a directed knowledge graph.
-- **Hybrid Vector Embeddings**: Connects to local Ollama (`localhost:11434` with `nomic-embed-text`) with deterministic high-speed fallback vectors for offline development.
-- **Sub-Millisecond Cosine Similarity**: Fast in-memory vector store with persistence to JSON/WAL snapshots.
-- **Force-Directed Web UI**: Canvas-based 60fps graph simulation with physics springs, semantic search query highlighting, and document inspection drawer.
 
-## API Endpoints
-- `GET /health`: Engine status, indexed note count, total chunk count.
-- `GET /api/graph`: D3-compatible nodes and links for force graph visualization.
-- `POST /api/search`: Vector cosine search against vault memories (`{"query": "error in crucible", "top_k": 5}`).
-- `POST /api/reindex`: Force immediate full vault re-scan.
+- **Continuous Vault Watcher**: Uses `fsnotify` to track changes in any Obsidian vault in real time, auto-reindexing modified chunks and purging deleted notes.
+- **Wikilink & Markdown Graph Extraction**: Resolves `[[wikilinks]]` into a directed knowledge graph.
+- **Sub-Millisecond Cosine Similarity**: High-speed in-memory vector store with persistence to JSON/WAL snapshots.
+- **Zero-Port Sprawl**: Communicates over Unix Domain Socket (`/tmp/cipher/mem.sock`) or HTTP `:8083`.
+
+---
 
 ## Quickstart
 
-### 1. Run Backend Engine
+### Build Standalone Binary
 ```bash
-go mod tidy
-go run . --vault ./sample_vault --port 8083
+go build -o cipher-mem .
 ```
 
-### 2. Run Web Visualizer
+### Run Memory Engine
 ```bash
-cd web
-npm install
-npm run dev
-# Open http://localhost:3003
+./cipher-mem --vault ./sample_vault --port 8083 --socket /tmp/cipher/mem.sock
 ```
+
+### Search Memories via Vector Similarity
+```bash
+curl -X POST http://localhost:8083/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Execution Timeout Runaway Loop", "top_k": 3}'
+```
+
+---
+
+## License
+MIT © [Shlok Tiwari](https://github.com/sshloktiwarii)
