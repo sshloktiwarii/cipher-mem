@@ -1,4 +1,4 @@
-# Foundry Graph: Obsidian Vector Engine & Memory Visualizer
+# cipher-mem: Obsidian Vector Engine & Memory Visualizer
 
 A persistent memory engine and interactive force-directed graph visualizer built in Go and Next.js. It bridges local LLM agents directly with an Obsidian second brain, automatically parsing, chunking, and embedding Markdown vaults so agents can ground decisions in architecture records, incident resolutions, and team knowledge.
 

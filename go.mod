@@ -1,4 +1,4 @@
-module github.com/sshloktiwarii/foundry-graph
+module github.com/sshloktiwarii/cipher-mem
 
 go 1.24
 
