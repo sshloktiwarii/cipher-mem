@@ -104,6 +104,7 @@ func main() {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 		var req struct {
 			Query string `json:"query"`
 			TopK  int    `json:"top_k"`

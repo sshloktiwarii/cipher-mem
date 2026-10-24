@@ -310,6 +310,16 @@ export default function FoundryGraphPage() {
       simulationRef.current.transform.k = Math.max(0.3, Math.min(3, simulationRef.current.transform.k * zoomFactor));
     };
 
+    const onResize = () => {
+      if (!canvas) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * window.devicePixelRatio;
+      canvas.height = h * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    };
+
+    window.addEventListener("resize", onResize);
     canvas.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -317,6 +327,7 @@ export default function FoundryGraphPage() {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      window.removeEventListener("resize", onResize);
       canvas.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
