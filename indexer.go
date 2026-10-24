@@ -25,20 +25,25 @@ var (
 )
 
 type Indexer struct {
-	vaultPath string
-	ollamaURL string
-	model     string
-	store     *VectorStore
-	client    *http.Client
+	vaultPath  string
+	vectorizer Vectorizer
+	store      *VectorStore
+	ollamaURL  string
+	model      string
+	client     *http.Client
 }
 
-func NewIndexer(vaultPath, ollamaURL, model string, store *VectorStore) *Indexer {
+func NewIndexer(vaultPath, ollamaURL, model string, store *VectorStore, vec Vectorizer) *Indexer {
+	if vec == nil {
+		vec = NewEmbeddedMiniLMVectorizer()
+	}
 	return &Indexer{
-		vaultPath: vaultPath,
-		ollamaURL: ollamaURL,
-		model:     model,
-		store:     store,
-		client:    &http.Client{Timeout: 10 * time.Second},
+		vaultPath:  vaultPath,
+		vectorizer: vec,
+		store:      store,
+		ollamaURL:  ollamaURL,
+		model:      model,
+		client:     &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -224,37 +229,38 @@ func extractTags(content string) []string {
 	return tags
 }
 
-// GetEmbedding attempts Ollama /api/embeddings, falls back to deterministic embedding
+// GetEmbedding executes sub-millisecond vectorization via the embedded vectorizer
 func (idx *Indexer) GetEmbedding(text string) ([]float64, error) {
-	reqBody, _ := json.Marshal(map[string]string{
-		"model":  idx.model,
-		"prompt": text,
-	})
-
-	url := fmt.Sprintf("%s/api/embeddings", strings.TrimRight(idx.ollamaURL, "/"))
-	resp, err := idx.client.Post(url, "application/json", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fallbackEmbedding(text), nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fallbackEmbedding(text), nil
+	if idx.vectorizer != nil {
+		return idx.vectorizer.Embed(text)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fallbackEmbedding(text), nil
+	// Legacy Ollama fallback if explicitly configured
+	if idx.ollamaURL != "" && !strings.Contains(idx.ollamaURL, "disabled") {
+		reqBody, _ := json.Marshal(map[string]string{
+			"model":  idx.model,
+			"prompt": text,
+		})
+
+		url := fmt.Sprintf("%s/api/embeddings", strings.TrimRight(idx.ollamaURL, "/"))
+		resp, err := idx.client.Post(url, "application/json", bytes.NewBuffer(reqBody))
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				body, err := io.ReadAll(resp.Body)
+				if err == nil {
+					var res struct {
+						Embedding []float64 `json:"embedding"`
+					}
+					if err := json.Unmarshal(body, &res); err == nil && len(res.Embedding) > 0 {
+						return res.Embedding, nil
+					}
+				}
+			}
+		}
 	}
 
-	var res struct {
-		Embedding []float64 `json:"embedding"`
-	}
-	if err := json.Unmarshal(body, &res); err != nil || len(res.Embedding) == 0 {
-		return fallbackEmbedding(text), nil
-	}
-
-	return res.Embedding, nil
+	return fallbackEmbedding(text), nil
 }
 
 // fallbackEmbedding generates a normalized 128-dimensional embedding from text n-grams

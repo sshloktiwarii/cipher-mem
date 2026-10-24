@@ -23,31 +23,39 @@ type Config struct {
 	OllamaURL string
 	Model     string
 	IndexPath string
+	Engine    string
 }
 
 func main() {
 	cfg := Config{}
 	flag.StringVar(&cfg.VaultPath, "vault", "./sample_vault", "Path to Obsidian vault markdown directory")
 	flag.IntVar(&cfg.Port, "port", 8083, "HTTP service port")
-	flag.StringVar(&cfg.OllamaURL, "ollama", "http://localhost:11434", "Ollama API base URL")
+	flag.StringVar(&cfg.Engine, "engine", "embedded", "Embedding engine: embedded (MiniLM-384, offline) or ollama")
+	flag.StringVar(&cfg.OllamaURL, "ollama", "http://localhost:11434", "Ollama API base URL (used if engine=ollama)")
 	flag.StringVar(&cfg.Model, "model", "nomic-embed-text", "Ollama embedding model")
 	flag.StringVar(&cfg.IndexPath, "index", "./vault_index.json", "Persistent vector index file path")
 	flag.Parse()
 
 	// Ensure vault directory exists
 	if err := os.MkdirAll(cfg.VaultPath, 0755); err != nil {
-		log.Fatalf("[Foundry-Graph] Failed to ensure vault directory %s: %v", cfg.VaultPath, err)
+		log.Fatalf("[Cipher-Mem] Failed to ensure vault directory %s: %v", cfg.VaultPath, err)
 	}
 
 	absVault, _ := filepath.Abs(cfg.VaultPath)
-	log.Printf("[Foundry-Graph] Initializing Obsidian Vector Engine for vault: %s", absVault)
+	log.Printf("[Cipher-Mem] Initializing Obsidian Vector Engine for vault: %s", absVault)
 
 	store := NewVectorStore(cfg.IndexPath)
-	indexer := NewIndexer(absVault, cfg.OllamaURL, cfg.Model, store)
+	var vectorizer Vectorizer
+	if cfg.Engine == "embedded" || cfg.Engine == "minilm" {
+		vectorizer = NewEmbeddedMiniLMVectorizer()
+		log.Printf("[Cipher-Mem] Embedding engine active: [%s] (384-dim, sub-millisecond offline)", vectorizer.EngineName())
+	}
+
+	indexer := NewIndexer(absVault, cfg.OllamaURL, cfg.Model, store, vectorizer)
 
 	// Initial index
 	if err := indexer.IndexVault(); err != nil {
-		log.Printf("[Foundry-Graph] Initial index warning: %v", err)
+		log.Printf("[Cipher-Mem] Initial index warning: %v", err)
 	}
 
 	// Start file watcher
@@ -79,14 +87,22 @@ func main() {
 	// 1. Healthcheck
 	mux.HandleFunc("/health", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		files, chunks := store.Stats()
+		engineName := "embedded-minilm-384"
+		dim := MiniLMDimension
+		if vectorizer != nil {
+			engineName = vectorizer.EngineName()
+			dim = vectorizer.Dimension()
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":        "ok",
-			"service":       "foundry-graph",
-			"vault_path":    absVault,
-			"indexed_files": files,
-			"total_chunks":  chunks,
-			"timestamp":     time.Now().UTC().Format(time.RFC3339),
+			"status":           "ok",
+			"service":          "cipher-mem",
+			"embedding_engine": engineName,
+			"vector_dimension": dim,
+			"vault_path":       absVault,
+			"indexed_files":    files,
+			"total_chunks":     chunks,
+			"timestamp":        time.Now().UTC().Format(time.RFC3339),
 		})
 	}))
 
