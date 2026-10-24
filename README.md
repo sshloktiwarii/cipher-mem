@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/header.svg" width="100%" alt="Cipher Header Banner" />
+</p>
+
 # cipher-mem
 
 Persistent Markdown vault parser, vector indexer, and cosine similarity engine.
