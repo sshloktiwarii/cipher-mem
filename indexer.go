@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"math"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,12 +24,9 @@ type Indexer struct {
 	vaultPath  string
 	vectorizer Vectorizer
 	store      *VectorStore
-	ollamaURL  string
-	model      string
-	client     *http.Client
 }
 
-func NewIndexer(vaultPath, ollamaURL, model string, store *VectorStore, vec Vectorizer) *Indexer {
+func NewIndexer(vaultPath string, store *VectorStore, vec Vectorizer) *Indexer {
 	if vec == nil {
 		vec = NewEmbeddedMiniLMVectorizer()
 	}
@@ -41,9 +34,6 @@ func NewIndexer(vaultPath, ollamaURL, model string, store *VectorStore, vec Vect
 		vaultPath:  vaultPath,
 		vectorizer: vec,
 		store:      store,
-		ollamaURL:  ollamaURL,
-		model:      model,
-		client:     &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -229,37 +219,11 @@ func extractTags(content string) []string {
 	return tags
 }
 
-// GetEmbedding executes sub-millisecond vectorization via the embedded vectorizer
+// GetEmbedding executes sub-millisecond vectorization via the embedded ONNX/pure-Go vectorizer
 func (idx *Indexer) GetEmbedding(text string) ([]float64, error) {
 	if idx.vectorizer != nil {
 		return idx.vectorizer.Embed(text)
 	}
-
-	// Legacy Ollama fallback if explicitly configured
-	if idx.ollamaURL != "" && !strings.Contains(idx.ollamaURL, "disabled") {
-		reqBody, _ := json.Marshal(map[string]string{
-			"model":  idx.model,
-			"prompt": text,
-		})
-
-		url := fmt.Sprintf("%s/api/embeddings", strings.TrimRight(idx.ollamaURL, "/"))
-		resp, err := idx.client.Post(url, "application/json", bytes.NewBuffer(reqBody))
-		if err == nil {
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				body, err := io.ReadAll(resp.Body)
-				if err == nil {
-					var res struct {
-						Embedding []float64 `json:"embedding"`
-					}
-					if err := json.Unmarshal(body, &res); err == nil && len(res.Embedding) > 0 {
-						return res.Embedding, nil
-					}
-				}
-			}
-		}
-	}
-
 	return fallbackEmbedding(text), nil
 }
 

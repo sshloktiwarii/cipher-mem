@@ -20,8 +20,8 @@ import (
 type Config struct {
 	VaultPath string
 	Port      int
-	OllamaURL string
-	Model     string
+	ModelPath string
+	SharedLib string
 	IndexPath string
 	Engine    string
 }
@@ -30,9 +30,9 @@ func main() {
 	cfg := Config{}
 	flag.StringVar(&cfg.VaultPath, "vault", "./sample_vault", "Path to Obsidian vault markdown directory")
 	flag.IntVar(&cfg.Port, "port", 8083, "HTTP service port")
-	flag.StringVar(&cfg.Engine, "engine", "embedded", "Embedding engine: embedded (MiniLM-384, offline) or ollama")
-	flag.StringVar(&cfg.OllamaURL, "ollama", "http://localhost:11434", "Ollama API base URL (used if engine=ollama)")
-	flag.StringVar(&cfg.Model, "model", "nomic-embed-text", "Ollama embedding model")
+	flag.StringVar(&cfg.Engine, "engine", "onnx", "Embedding engine: onnx (embedded in-process runtime) or pure-go")
+	flag.StringVar(&cfg.ModelPath, "model-path", "./minilm.onnx", "Path to local all-MiniLM-L6-v2 .onnx model file")
+	flag.StringVar(&cfg.SharedLib, "onnx-lib", "", "Path to onnxruntime shared library (.dylib/.so)")
 	flag.StringVar(&cfg.IndexPath, "index", "./vault_index.json", "Persistent vector index file path")
 	flag.Parse()
 
@@ -46,12 +46,15 @@ func main() {
 
 	store := NewVectorStore(cfg.IndexPath)
 	var vectorizer Vectorizer
-	if cfg.Engine == "embedded" || cfg.Engine == "minilm" {
+	if cfg.Engine == "onnx" || cfg.Engine == "embedded" {
+		vectorizer = NewONNXEmbeddingEngine(cfg.ModelPath, cfg.SharedLib)
+		log.Printf("[Cipher-Mem] Embedding engine active: [%s] (384-dim, sub-millisecond)", vectorizer.EngineName())
+	} else {
 		vectorizer = NewEmbeddedMiniLMVectorizer()
-		log.Printf("[Cipher-Mem] Embedding engine active: [%s] (384-dim, sub-millisecond offline)", vectorizer.EngineName())
+		log.Printf("[Cipher-Mem] Embedding engine active: [%s] (384-dim, pure-go offline)", vectorizer.EngineName())
 	}
 
-	indexer := NewIndexer(absVault, cfg.OllamaURL, cfg.Model, store, vectorizer)
+	indexer := NewIndexer(absVault, store, vectorizer)
 
 	// Initial index
 	if err := indexer.IndexVault(); err != nil {
